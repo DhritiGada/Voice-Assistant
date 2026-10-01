@@ -254,6 +254,17 @@ function youtubeSearch(query) {
   return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
 }
 
+async function resolveYouTubeFirstResult(query) {
+  try {
+    const response = await fetch(`/api/youtube-search?q=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error("Search unavailable");
+    const data = await response.json();
+    return data.url || youtubeSearch(query);
+  } catch {
+    return youtubeSearch(query);
+  }
+}
+
 function parseCommand(raw) {
   const text = normalize(raw);
   if (!text) return null;
@@ -684,7 +695,16 @@ function App() {
       return;
     }
 
-    if (preview.type === "open" || preview.type === "search" || preview.type === "music") {
+    if (preview.type === "music") {
+      const query = preview.title;
+      resolveYouTubeFirstResult(query).then((url) => {
+        window.open(url, "_blank", "noopener,noreferrer");
+      });
+      speak("Opening the first YouTube result.");
+      return;
+    }
+
+    if (preview.type === "open" || preview.type === "search") {
       window.open(preview.url, "_blank", "noopener,noreferrer");
       speak("Opening it now.");
       return;

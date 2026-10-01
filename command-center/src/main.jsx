@@ -31,9 +31,6 @@ import {
 } from "lucide-react";
 import "./styles.css";
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
-const GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
-
 const STORAGE = {
   tasks: "voice-command-center.tasks",
   notes: "voice-command-center.notes",
@@ -475,131 +472,6 @@ function App() {
       .slice(0, 10);
   }, [tasks, notes, events]);
 
-  async function fetchGoogleEvents(token) {
-    try {
-      setCalendarStatus("Syncing Google Calendar…");
-      const timeMin = new Date();
-      timeMin.setDate(timeMin.getDate() - 1);
-      const timeMax = new Date();
-      timeMax.setDate(timeMax.getDate() + 90);
-
-      const params = new URLSearchParams({
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString(),
-        singleEvents: "true",
-        orderBy: "startTime",
-        maxResults: "250",
-      });
-
-      const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!response.ok) throw new Error("Calendar access expired. Please reconnect.");
-
-      const data = await response.json();
-      const mapped = (data.items || [])
-        .filter((item) => item.start?.dateTime && item.end?.dateTime)
-        .map((item) => ({
-          id: item.id,
-          title: item.summary || "Busy",
-          start: item.start.dateTime,
-          end: item.end.dateTime,
-          source: "google",
-        }));
-
-      setGoogleEvents(mapped);
-      setCalendarStatus(`Google Calendar connected · ${mapped.length} upcoming events synced`);
-    } catch (error) {
-      setCalendarStatus(error.message || "Could not sync Google Calendar");
-      setGoogleEvents([]);
-    }
-  }
-
-  function connectGoogleCalendar() {
-    if (!GOOGLE_CLIENT_ID) {
-      setCalendarStatus("Google Calendar setup is not configured yet");
-      return;
-    }
-
-    if (!window.google?.accounts?.oauth2) {
-      setCalendarStatus("Google sign-in is still loading. Try again in a moment.");
-      return;
-    }
-
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: GOOGLE_SCOPES,
-      callback: (response) => {
-        if (response.error || !response.access_token) {
-          setCalendarStatus("Google Calendar connection was not completed");
-          return;
-        }
-        sessionStorage.setItem("voice-command-center.google-token", response.access_token);
-        setGoogleToken(response.access_token);
-        setCalendarStatus("Google Calendar connected");
-      },
-    });
-
-    client.requestAccessToken({ prompt: googleToken ? "" : "consent" });
-  }
-
-  function disconnectGoogleCalendar() {
-    if (googleToken && window.google?.accounts?.oauth2) {
-      window.google.accounts.oauth2.revoke(googleToken, () => {});
-    }
-    sessionStorage.removeItem("voice-command-center.google-token");
-    setGoogleToken("");
-    setGoogleEvents([]);
-    setCalendarStatus("Calendar not connected");
-  }
-
-  async function createGoogleCalendarEvent(event) {
-    if (!googleToken) return null;
-
-    const body = {
-      summary: event.title,
-      description: "Created with Voice Command Center",
-      start: { dateTime: event.start },
-      end: { dateTime: event.end },
-      conferenceData: {
-        createRequest: {
-          requestId: `voice-command-${crypto.randomUUID()}`,
-          conferenceSolutionKey: { type: "hangoutsMeet" },
-        },
-      },
-    };
-
-    const response = await fetch(
-      "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${googleToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      }
-    );
-
-    if (!response.ok) {
-      const detail = await response.json().catch(() => ({}));
-      throw new Error(detail.error?.message || "Could not create the Google Calendar event.");
-    }
-
-    const created = await response.json();
-    await fetchGoogleEvents(googleToken);
-
-    return {
-      htmlLink: created.htmlLink,
-      meetingUrl:
-        created.hangoutLink ||
-        created.conferenceData?.entryPoints?.find((entry) => entry.entryPointType === "video")?.uri ||
-        "",
-    };
-  }
-
   function speak(message) {
     if (!voiceReply || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
@@ -816,7 +688,7 @@ function App() {
     "Open LinkedIn",
   ];
 
-  const conflict = preview?.type === "meeting" ? meetingConflict([...events, ...googleEvents], preview) : null;
+  const conflict = preview?.type === "meeting" ? meetingConflict(events, preview) : null;
   const completedTasks = tasks.filter((task) => task.done).length;
 
   return (
@@ -831,14 +703,7 @@ function App() {
         </div>
 
         <div className="topbar-actions">
-          <button
-            className={googleToken ? "calendar-connect connected" : "calendar-connect"}
-            onClick={googleToken ? disconnectGoogleCalendar : connectGoogleCalendar}
-            title={calendarStatus}
-          >
-            <CalendarDays size={16} />
-            {googleToken ? "Calendar connected" : "Connect Google Calendar"}
-          </button>
+          <button className="calendar-connect" disabled title="Calendar connection coming soon"><CalendarDays size={16} /> Calendar connection coming soon</button>
 
           <select
             className="language-select"
@@ -998,170 +863,3 @@ function App() {
                           <Plus size={15} /> Add row
                         </button>
                       </>
-                    )}
-                  </div>
-                )}
-
-                {preview.type === "travel" && (
-                  <div className="travel-builder">
-                    <label>Destination<input value={preview.destination || ""} onChange={(e) => setPreview({ ...preview, destination: e.target.value, title: e.target.value ? `Trip to ${e.target.value}` : "Trip planner" })} placeholder="Destination" /></label>
-                    <div className="inline-fields">
-                      <label>Start<input type="date" value={preview.startDate || ""} onChange={(e) => setPreview({ ...preview, startDate: e.target.value })} /></label>
-                      <label>End<input type="date" value={preview.endDate || ""} onChange={(e) => setPreview({ ...preview, endDate: e.target.value })} /></label>
-                    </div>
-                  </div>
-                )}
-
-                {preview.type === "weather" && weather && (
-                  weather.error ? <div className="conflict-alert">{weather.error}</div> :
-                  <div className="weather-result">
-                    <CloudSun size={24} />
-                    <div><strong>{weather.temperature}°F</strong><span>{weather.label}</span></div>
-                    <small>Feels {weather.feels}° · Wind {weather.wind} mph</small>
-                  </div>
-                )}
-
-                {!["answer", "weather", "clear_history"].includes(preview.type) && (
-                  <div className="next-steps">
-                    <span>Suggested next steps</span>
-                    <ul>{nextStepsFor(preview.title, preview.type).map((step) => <li key={step}>{step}</li>)}</ul>
-                  </div>
-                )}
-              </div>
-
-              <div className="preview-actions">
-                {preview.type === "meeting" && (
-                  <button className="confirm" disabled={!preview.date || !preview.time || Boolean(conflict)} onClick={scheduleMeeting}>
-                    <CalendarDays size={17} /> {googleToken ? (busy ? "Adding…" : "Add to Google Calendar") : "Create calendar draft"}
-                  </button>
-                )}
-
-                {preview.type === "spreadsheet" && (
-                  <button className="confirm" disabled={!preview.fields?.length} onClick={downloadSpreadsheet}>
-                    <Download size={17} /> Download .xlsx
-                  </button>
-                )}
-
-                {preview.type === "travel" && preview.destination && (
-                  <>
-                    <button className="confirm" onClick={() => window.open(`https://www.google.com/travel/flights?q=${encodeURIComponent("flights to " + preview.destination)}`, "_blank", "noopener,noreferrer")}>
-                      <Plane size={16} /> Flights
-                    </button>
-                    <button className="cancel" onClick={() => window.open(`https://www.airbnb.com/s/${encodeURIComponent(preview.destination)}/homes`, "_blank", "noopener,noreferrer")}>
-                      <MapPin size={16} /> Airbnb
-                    </button>
-                    <button className="cancel" onClick={() => window.open(`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(preview.destination)}`, "_blank", "noopener,noreferrer")}>
-                      <ExternalLink size={16} /> Hotels
-                    </button>
-                  </>
-                )}
-
-                {!["meeting", "spreadsheet", "travel", "answer"].includes(preview.type) && (
-                  <button className="confirm" disabled={busy} onClick={executeAction}>
-                    <Check size={17} />
-                    {preview.type === "task" ? "Add task" :
-                      preview.type === "note" ? "Save note" :
-                      preview.type === "weather" ? (busy ? "Checking…" : "Get weather") :
-                      preview.type === "clear_history" ? "Clear history" : "Continue"}
-                  </button>
-                )}
-
-                <button className="cancel" onClick={() => { setPreview(null); setWeather(null); }}>
-                  <X size={16} /> Dismiss
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="dashboard expanded-dashboard">
-        <article className="data-card">
-          <div className="data-heading">
-            <div><span className="section-label">TASKS</span><h2>Action list</h2></div>
-            <span className="metric">{tasks.length - completedTasks} open</span>
-          </div>
-
-          <div className="item-list">
-            {tasks.length === 0 ? <p className="empty-copy">Voice-created tasks will appear here.</p> :
-              tasks.slice(0, 6).map((task) => (
-                <div className={task.done ? "list-item done" : "list-item"} key={task.id}>
-                  <button className="check-button" onClick={() => setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: !item.done } : item))}>
-                    {task.done && <Check size={14} />}
-                  </button>
-                  <div className="item-copy">
-                    <strong>{task.title}</strong>
-                    <span>{task.category} · {task.due ? `Due ${task.due}` : "No due date"}</span>
-                  </div>
-                  <button className="delete-button" onClick={() => setTasks((current) => current.filter((item) => item.id !== task.id))}><Trash2 size={14} /></button>
-                </div>
-              ))}
-          </div>
-        </article>
-
-        <article className="data-card">
-          <div className="data-heading">
-            <div><span className="section-label">NOTES</span><h2>Captured thoughts</h2></div>
-            <span className="metric">{notes.length} saved</span>
-          </div>
-
-          <div className="note-grid">
-            {notes.length === 0 ? <p className="empty-copy">Say “note that…” to capture something quickly.</p> :
-              notes.slice(0, 4).map((note) => (
-                <div className="note-card" key={note.id}>
-                  <FileText size={16} />
-                  <span className="note-category">{note.category}</span>
-                  <p>{note.text}</p>
-                  <button onClick={() => setNotes((current) => current.filter((item) => item.id !== note.id))}><Trash2 size={13} /></button>
-                </div>
-              ))}
-          </div>
-        </article>
-
-        <article className="data-card timeline-card">
-          <div className="data-heading">
-            <div><span className="section-label">TIMELINE</span><h2>Dated by category</h2></div>
-            <CalendarDays size={19} />
-          </div>
-
-          <div className="history-list">
-            {timeline.length === 0 ? <p className="empty-copy">Dated tasks, notes, and meetings will appear here.</p> :
-              timeline.map((entry) => (
-                <div className="history-item" key={entry.id}>
-                  <div className="history-dot" />
-                  <div>
-                    <strong>{entry.title}</strong>
-                    <span>{entry.date || "Unscheduled"} · {entry.category} · {entry.type}</span>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </article>
-
-        <article className="data-card history-card">
-          <div className="data-heading">
-            <div><span className="section-label">HISTORY</span><h2>Recent commands</h2></div>
-            <button className="clear-link" onClick={() => processCommand("clear history")}><History size={16} /> Clear</button>
-          </div>
-
-          <div className="history-list">
-            {history.length === 0 ? <p className="empty-copy">Your interpreted commands will appear here.</p> :
-              history.slice(0, 7).map((entry) => (
-                <div className="history-item" key={entry.id}>
-                  <div className="history-dot" />
-                  <div><strong>{entry.text}</strong><span>{entry.category} · {entry.intent}</span></div>
-                </div>
-              ))}
-          </div>
-        </article>
-      </section>
-
-      <footer>
-        <div className="footer-note"><CheckCircle2 size={16} /> External actions stay visible and user-controlled.</div>
-        <span>{googleToken ? calendarStatus : "Tasks, notes, meetings, and history are stored locally in your browser."}</span>
-      </footer>
-    </main>
-  );
-}
-
-createRoot(document.getElementById("root")).render(<App />);

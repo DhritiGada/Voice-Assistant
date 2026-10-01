@@ -355,9 +355,13 @@ function parseCommand(raw) {
   }
 
   const taskPatterns = [
-    /^remind me to\s+(.+)/i,
-    /^remind me about\s+(.+)/i,
-    /^remind me of\s+(.+)/i,
+    /^(?:please\s+)?remind me (?:to|about|of|for)\s+(.+)/i,
+    /^can you remind me (?:to|about|of|for)\s+(.+)/i,
+    /^could you remind me (?:to|about|of|for)\s+(.+)/i,
+    /^set (?:a )?reminder (?:to|about|of|for)\s+(.+)/i,
+    /^create (?:a )?reminder (?:to|about|of|for)\s+(.+)/i,
+    /^make (?:a )?reminder (?:to|about|of|for)\s+(.+)/i,
+    /^reminder(?:\s+for)?\s+(.+)/i,
     /^create (?:a )?task\s+(.+)/i,
     /^add (?:a )?task\s+(.+)/i,
     /^task\s+(.+)/i,
@@ -371,7 +375,7 @@ function parseCommand(raw) {
     const match = text.match(pattern);
     if (match) {
       const title = stripPlanningWords(match[1]);
-      const isReminder = /^remind me (?:to|about|of)\s+/i.test(text);
+      const isReminder = /\bremind(?:er)?\b/i.test(text);
       return {
         type: "task",
         label: isReminder ? "Save reminder" : "Create task",
@@ -407,6 +411,26 @@ function parseCommand(raw) {
         description: "This will be timestamped, categorized, and added to your timeline.",
       };
     }
+  }
+
+  if (/\bremind(?:er)?\b/i.test(text)) {
+    const title = stripPlanningWords(
+      text
+        .replace(/^(?:please\s+)?(?:can you\s+|could you\s+)?remind me\s+(?:to|about|of|for)?\s*/i, "")
+        .replace(/^(?:set|create|make)\s+(?:a\s+)?reminder\s+(?:to|about|of|for)?\s*/i, "")
+        .replace(/^reminder\s+(?:for\s+)?/i, "")
+    );
+
+    return {
+      type: "task",
+      label: "Save reminder",
+      title: title || text,
+      due: parseDate(text),
+      category: categoryFor(title || text),
+      keywords: keywordsFor(title || text),
+      isReminder: true,
+      description: "I’ll keep this in your action list as a reminder.",
+    };
   }
 
   const openMatch = text.match(/^open\s+(.+)/i);

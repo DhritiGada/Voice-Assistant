@@ -207,6 +207,16 @@ function nextStepsFor(text, type) {
   return ["Review the interpreted action", "Add any missing details", "Continue when it looks right"];
 }
 
+function extractKeywordContent(text, keywordRegex) {
+  return stripPlanningWords(
+    text
+      .replace(keywordRegex, " ")
+      .replace(/^\s*(?:me|my|a|an|the|that|to|about|of|for|this)\b\s*/i, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
 function parseFields(text) {
   const match = text.match(/(?:fields|columns?)\s+(?:are\s+)?(.+)/i);
   if (!match) return [];
@@ -354,14 +364,35 @@ function parseCommand(raw) {
     };
   }
 
+  if (/\bremind(?:er)?\b/i.test(text)) {
+    const title = extractKeywordContent(text, /\bremind(?:er)?\b/i) || text;
+
+    return {
+      type: "task",
+      label: "Save reminder",
+      title,
+      due: parseDate(text),
+      category: categoryFor(title),
+      keywords: keywordsFor(title),
+      isReminder: true,
+      description: "I’ll keep this in your action list as a reminder.",
+    };
+  }
+
+  if (/\bnote\b/i.test(text)) {
+    const title = extractKeywordContent(text, /\bnote\b/i) || text;
+
+    return {
+      type: "note",
+      label: "Save note",
+      title,
+      category: categoryFor(title),
+      keywords: keywordsFor(title),
+      description: "This will be timestamped, categorized, and added to your timeline.",
+    };
+  }
+
   const taskPatterns = [
-    /^(?:please\s+)?remind me (?:to|about|of|for)\s+(.+)/i,
-    /^can you remind me (?:to|about|of|for)\s+(.+)/i,
-    /^could you remind me (?:to|about|of|for)\s+(.+)/i,
-    /^set (?:a )?reminder (?:to|about|of|for)\s+(.+)/i,
-    /^create (?:a )?reminder (?:to|about|of|for)\s+(.+)/i,
-    /^make (?:a )?reminder (?:to|about|of|for)\s+(.+)/i,
-    /^reminder(?:\s+for)?\s+(.+)/i,
     /^create (?:a )?task\s+(.+)/i,
     /^add (?:a )?task\s+(.+)/i,
     /^task\s+(.+)/i,
@@ -375,62 +406,17 @@ function parseCommand(raw) {
     const match = text.match(pattern);
     if (match) {
       const title = stripPlanningWords(match[1]);
-      const isReminder = /\bremind(?:er)?\b/i.test(text);
       return {
         type: "task",
-        label: isReminder ? "Save reminder" : "Create task",
+        label: "Create task",
         title,
         due: parseDate(text),
         category: categoryFor(title),
         keywords: keywordsFor(title),
-        isReminder,
-        description: isReminder
-          ? "I’ve structured this as a reminder and suggested useful next steps."
-          : "I’ve structured this as a task and suggested useful next steps.",
+        isReminder: false,
+        description: "I’ve structured this as a task and suggested useful next steps.",
       };
     }
-  }
-
-  const notePatterns = [
-    /^note that\s+(.+)/i,
-    /^take (?:a )?note\s+(.+)/i,
-    /^save (?:a )?note\s+(.+)/i,
-    /^remember\s+(.+)/i,
-    /^capture\s+(.+)/i,
-  ];
-
-  for (const pattern of notePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      return {
-        type: "note",
-        label: "Save note",
-        title: match[1].trim(),
-        category: categoryFor(match[1]),
-        keywords: keywordsFor(match[1]),
-        description: "This will be timestamped, categorized, and added to your timeline.",
-      };
-    }
-  }
-
-  if (/\bremind(?:er)?\b/i.test(text)) {
-    const title = stripPlanningWords(
-      text
-        .replace(/^(?:please\s+)?(?:can you\s+|could you\s+)?remind me\s+(?:to|about|of|for)?\s*/i, "")
-        .replace(/^(?:set|create|make)\s+(?:a\s+)?reminder\s+(?:to|about|of|for)?\s*/i, "")
-        .replace(/^reminder\s+(?:for\s+)?/i, "")
-    );
-
-    return {
-      type: "task",
-      label: "Save reminder",
-      title: title || text,
-      due: parseDate(text),
-      category: categoryFor(title || text),
-      keywords: keywordsFor(title || text),
-      isReminder: true,
-      description: "I’ll keep this in your action list as a reminder.",
-    };
   }
 
   const openMatch = text.match(/^open\s+(.+)/i);

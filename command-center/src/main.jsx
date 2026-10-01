@@ -155,56 +155,21 @@ function stripPlanningWords(text) {
     .trim();
 }
 
-function categoryFor(text) {
-  const lower = text.toLowerCase();
-
-  if (/job|resume|interview|application|recruiter|linkedin|career/.test(lower)) return "Career";
-  if (/trip|flight|hotel|airbnb|travel|vacation|airport/.test(lower)) return "Travel";
-  if (/invoice|expense|payment|budget|finance|bank/.test(lower)) return "Finance";
-  if (/course|study|class|exam|learn|assignment/.test(lower)) return "Learning";
-  if (/doctor|health|gym|workout|medication/.test(lower)) return "Health";
-  if (/meeting|client|project|presentation|report|work/.test(lower)) return "Work";
-  return "Personal";
+function categoryFor() {
+  return "General";
 }
 
 function keywordsFor(text) {
-  const stop = new Set([
-    "the", "a", "an", "to", "for", "and", "or", "in", "on", "at", "with", "my",
-    "me", "i", "of", "is", "it", "that", "this", "tomorrow", "today"
-  ]);
-
   return [...new Set(
     text.toLowerCase()
       .replace(/[^a-z0-9\s-]/g, " ")
       .split(/\s+/)
-      .filter((word) => word.length > 2 && !stop.has(word))
+      .filter((word) => word.length > 2)
   )].slice(0, 5);
 }
 
-function nextStepsFor(text, type) {
-  const lower = text.toLowerCase();
-
-  if (/application|interview|recruiter|resume/.test(lower)) {
-    return ["Review the role requirements", "Tailor the application materials", "Set a follow-up reminder"];
-  }
-
-  if (type === "meeting") {
-    return ["Add an agenda", "Confirm attendees", "Prepare any notes or links"];
-  }
-
-  if (type === "travel") {
-    return ["Compare flights", "Check stays near your priorities", "Review weather before booking"];
-  }
-
-  if (type === "spreadsheet") {
-    return ["Confirm your columns", "Add the first rows", "Download the workbook"];
-  }
-
-  if (type === "task") {
-    return ["Confirm the due date", "Define the first concrete step", "Block time if it is high priority"];
-  }
-
-  return ["Review the interpreted action", "Add any missing details", "Continue when it looks right"];
+function nextStepsFor() {
+  return ["Review the action", "Add any missing details", "Continue when it looks right"];
 }
 
 function extractKeywordContent(text, keywordRegex) {
@@ -299,7 +264,7 @@ function parseCommand(raw) {
     };
   }
 
-  if (/\b(create|make|build)\b.*\b(excel|spreadsheet|workbook|sheet)\b/i.test(text)) {
+  if (/\b(excel|spreadsheet|workbook|sheet)\b/i.test(text)) {
     const fields = parseFields(text);
     return {
       type: "spreadsheet",
@@ -313,13 +278,11 @@ function parseCommand(raw) {
     };
   }
 
-  if (/\b(schedule|book|set up|create)\b.*\b(meeting|call|appointment|sync)\b/i.test(text)) {
+  if (/\b(meeting|call|appointment|sync)\b/i.test(text)) {
     const date = parseDate(text);
     const time = parseTime(text);
     const duration = parseDuration(text);
-    const title = stripPlanningWords(
-      text.replace(/^(schedule|book|set up|create)\s+(a\s+)?/i, "")
-    ) || "New meeting";
+    const title = extractKeywordContent(text, /\b(meeting|call|appointment|sync)\b/i) || "New meeting";
 
     return {
       type: "meeting",
@@ -334,11 +297,8 @@ function parseCommand(raw) {
     };
   }
 
-  if (/\b(play|listen to)\b.+/i.test(text)) {
-    const song = text
-      .replace(/^.*?\b(play|listen to)\b\s*/i, "")
-      .replace(/\bon youtube\b/i, "")
-      .trim();
+  if (/\b(play|music|song)\b/i.test(text)) {
+    const song = extractKeywordContent(text, /\b(play|music|song|youtube)\b/gi) || text;
 
     return {
       type: "music",
@@ -349,7 +309,7 @@ function parseCommand(raw) {
     };
   }
 
-  if (/\b(plan|book|find)\b.*\b(trip|flight|flights|hotel|hotels|airbnb|stay|vacation)\b/i.test(text)) {
+  if (/\b(trip|flight|flights|hotel|hotels|airbnb|stay|vacation|travel)\b/i.test(text)) {
     const destination =
       text.match(/\bto\s+([a-zA-Z .'-]+?)(?:\s+(?:from|on|for|next|this|tomorrow|today)\b|$)/i)?.[1]?.trim() || "";
 
@@ -392,34 +352,22 @@ function parseCommand(raw) {
     };
   }
 
-  const taskPatterns = [
-    /^create (?:a )?task\s+(.+)/i,
-    /^add (?:a )?task\s+(.+)/i,
-    /^task\s+(.+)/i,
-    /^i need to\s+(.+)/i,
-    /^todo\s+(.+)/i,
-    /^i have to\s+(.+)/i,
-    /^make sure i\s+(.+)/i,
-  ];
+  if (/\b(task|todo)\b/i.test(text)) {
+    const title = extractKeywordContent(text, /\b(task|todo)\b/i) || text;
 
-  for (const pattern of taskPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      const title = stripPlanningWords(match[1]);
-      return {
-        type: "task",
-        label: "Create task",
-        title,
-        due: parseDate(text),
-        category: categoryFor(title),
-        keywords: keywordsFor(title),
-        isReminder: false,
-        description: "I’ve structured this as a task and suggested useful next steps.",
-      };
-    }
+    return {
+      type: "task",
+      label: "Create task",
+      title,
+      due: parseDate(text),
+      category: categoryFor(title),
+      keywords: keywordsFor(title),
+      isReminder: false,
+      description: "I’ll keep this in your action list.",
+    };
   }
 
-  const openMatch = text.match(/^open\s+(.+)/i);
+  const openMatch = /\bopen\b/i.test(text) ? [text, extractKeywordContent(text, /\bopen\b/i)] : null;
   if (openMatch) {
     const destination = openMatch[1].trim();
     const key = Object.keys(SITES).find((site) => destination.toLowerCase().includes(site));
@@ -433,7 +381,9 @@ function parseCommand(raw) {
     };
   }
 
-  const searchMatch = text.match(/^(?:search(?: the web)? for|google|look up|find out)\s+(.+)/i);
+  const searchMatch = /\b(search|google)\b/i.test(text)
+    ? [text, extractKeywordContent(text, /\b(search|google)\b/i)]
+    : null;
   if (searchMatch) {
     const query = searchMatch[1].trim();
 
@@ -446,7 +396,7 @@ function parseCommand(raw) {
     };
   }
 
-  if (/\b(what time|current time|time is it)\b/i.test(text)) {
+  if (/\btime\b/i.test(text)) {
     return {
       type: "answer",
       label: "Current time",
@@ -1535,7 +1485,7 @@ function App() {
           <div className="data-heading">
             <div>
               <span className="section-label">TIMELINE</span>
-              <h2>Dated by category</h2>
+              <h2>Dated activity</h2>
             </div>
             <CalendarDays size={19} />
           </div>

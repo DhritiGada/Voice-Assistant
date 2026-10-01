@@ -356,6 +356,8 @@ function parseCommand(raw) {
 
   const taskPatterns = [
     /^remind me to\s+(.+)/i,
+    /^remind me about\s+(.+)/i,
+    /^remind me of\s+(.+)/i,
     /^create (?:a )?task\s+(.+)/i,
     /^add (?:a )?task\s+(.+)/i,
     /^task\s+(.+)/i,
@@ -369,7 +371,7 @@ function parseCommand(raw) {
     const match = text.match(pattern);
     if (match) {
       const title = stripPlanningWords(match[1]);
-      const isReminder = /^remind me to\s+/i.test(text);
+      const isReminder = /^remind me (?:to|about|of)\s+/i.test(text);
       return {
         type: "task",
         label: isReminder ? "Save reminder" : "Create task",
@@ -599,6 +601,56 @@ function App() {
 
     if (command.type === "answer") {
       speak(`The time is ${command.title}`);
+    }
+
+    if (command.type === "task" && command.isReminder) {
+      const reminder = {
+        id: crypto.randomUUID(),
+        title: command.title,
+        due: command.due,
+        category: command.category,
+        keywords: command.keywords || [],
+        createdAt: new Date().toISOString(),
+        done: false,
+        isReminder: true,
+      };
+
+      setTasks((current) => [reminder, ...current]);
+
+      const acknowledgement = command.due
+        ? `Yes, of course. I’ll keep a reminder for you about ${command.title}, and I’ve noted it for ${command.due}.`
+        : `Yes, of course. I’ll keep a reminder for you about ${command.title}.`;
+
+      setConversation((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: "assistant", text: acknowledgement },
+      ].slice(-12));
+      speak(acknowledgement);
+      setPreview(null);
+      setInput("");
+      return;
+    }
+
+    if (command.type === "note") {
+      const note = {
+        id: crypto.randomUUID(),
+        text: command.title,
+        category: command.category,
+        keywords: command.keywords || [],
+        createdAt: new Date().toISOString(),
+      };
+
+      setNotes((current) => [note, ...current]);
+
+      const acknowledgement = `Absolutely. I’ve made a note about ${command.title}, so you have it saved here.`;
+      setConversation((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: "assistant", text: acknowledgement },
+      ].slice(-12));
+      speak(acknowledgement);
+      setPreview(null);
+      setInput("");
+      return;
     }
 
     if (command.type === "music") {

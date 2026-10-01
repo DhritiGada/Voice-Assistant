@@ -792,3 +792,135 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+
+.conversation-shell {
+  padding: 18px 0 0;
+}
+
+.conversation-card {
+  border: 1px solid #272a35;
+  border-radius: 20px;
+  background: rgba(20, 22, 29, .86);
+  box-shadow: 0 20px 70px rgba(0,0,0,.16);
+  padding: 21px;
+}
+
+.conversation-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.chat-bubble {
+  max-width: 82%;
+  border-radius: 14px;
+  padding: 11px 13px;
+}
+
+.chat-bubble span {
+  display: block;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.chat-bubble p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.chat-bubble.user {
+  margin-left: auto;
+  background: #6f60d6;
+  color: white;
+}
+
+.chat-bubble.user span {
+  color: rgba(255,255,255,.7);
+}
+
+.chat-bubble.assistant {
+  background: #171920;
+  color: #b9bdc9;
+}
+
+.chat-bubble.assistant span {
+  color: #8d82e9;
+}
+
+.conversation-input {
+  display: grid;
+  grid-template-columns: 1fr 42px;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.conversation-input input {
+  min-width: 0;
+  border: 1px solid #2c303c;
+  border-radius: 11px;
+  background: #101218;
+  color: white;
+  padding: 12px 13px;
+}
+
+.conversation-input button {
+  border: 0;
+  border-radius: 11px;
+  background: #7564dd;
+  color: white;
+}
+
+.source-list {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #151720;
+}
+
+.source-list > span {
+  color: #8f83e9;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.source-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.source-list a {
+  color: #b9b3ff;
+  font-size: 9px;
+  text-decoration: none;
+  border: 1px solid #303348;
+  border-radius: 999px;
+  padding: 5px 8px;
+}
+
+.play-confirm {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 10px;
+  background: #7564dd;
+  color: white;
+  padding: 10px 12px;
+  font-size: 10px;
+  font-weight: 700;
+}

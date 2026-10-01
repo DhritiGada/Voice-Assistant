@@ -369,14 +369,18 @@ function parseCommand(raw) {
     const match = text.match(pattern);
     if (match) {
       const title = stripPlanningWords(match[1]);
+      const isReminder = /^remind me to\s+/i.test(text);
       return {
         type: "task",
-        label: "Create task",
+        label: isReminder ? "Save reminder" : "Create task",
         title,
         due: parseDate(text),
         category: categoryFor(title),
         keywords: keywordsFor(title),
-        description: "I’ve structured this as a task and suggested useful next steps.",
+        isReminder,
+        description: isReminder
+          ? "I’ve structured this as a reminder and suggested useful next steps."
+          : "I’ve structured this as a task and suggested useful next steps.",
       };
     }
   }
@@ -749,7 +753,15 @@ function App() {
         },
         ...current,
       ]);
-      speak("Task added.");
+      const acknowledgement = preview.isReminder
+        ? `Yes. I’ve saved your reminder: ${preview.title}${preview.due ? `, due ${preview.due}` : ""}. I’ll keep it in your reminder list.`
+        : `I’ve added the task: ${preview.title}${preview.due ? `, due ${preview.due}` : ""}.`;
+
+      speak(acknowledgement);
+      setConversation((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: "assistant", text: acknowledgement },
+      ].slice(-12));
       setPreview(null);
       setInput("");
       return;
@@ -766,7 +778,12 @@ function App() {
         },
         ...current,
       ]);
-      speak("Note saved.");
+      const acknowledgement = `I’ve made a note about: ${preview.title}.`;
+      speak(acknowledgement);
+      setConversation((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: "assistant", text: acknowledgement },
+      ].slice(-12));
       setPreview(null);
       setInput("");
       return;
@@ -1266,7 +1283,7 @@ function App() {
                   <button className="confirm" disabled={busy} onClick={executeAction}>
                     <Check size={17} />
                     {preview.type === "task"
-                      ? "Add task"
+                      ? preview.isReminder ? "Save reminder" : "Add task"
                       : preview.type === "note"
                       ? "Save note"
                       : preview.type === "weather"

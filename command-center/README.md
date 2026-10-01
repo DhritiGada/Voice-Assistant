@@ -45,3 +45,28 @@ npm run dev
 ```
 
 The original Python assistant remains preserved in the repository root.
+
+## Google Calendar connection
+
+The app includes an optional Google Calendar connection using Google Identity Services.
+
+When connected, the assistant can:
+
+- read upcoming events from the user's primary calendar
+- check proposed meetings against real calendar conflicts
+- create events directly in Google Calendar
+- request a Google Meet conference link when the user's Google account supports it
+
+### Google setup
+
+Create an OAuth 2.0 Web Client in Google Cloud, enable the Google Calendar API, and add the deployed Vercel domain as an authorized JavaScript origin.
+
+Add this environment variable to the Vercel project:
+
+```
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
+```
+
+Then redeploy the project.
+
+Calendar access is optional. The access token is stored only in browser session storage and is cleared when the user disconnects or the browser session ends.

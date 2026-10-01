@@ -697,9 +697,16 @@ function App() {
 
     if (preview.type === "music") {
       const query = preview.title;
+      const playerWindow = window.open("about:blank", "_blank");
+
       resolveYouTubeFirstResult(query).then((url) => {
-        window.open(url, "_blank", "noopener,noreferrer");
+        if (playerWindow) {
+          playerWindow.location.href = url;
+        } else {
+          window.location.href = url;
+        }
       });
+
       speak("Opening the first YouTube result.");
       return;
     }

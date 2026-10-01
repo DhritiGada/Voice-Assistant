@@ -782,11 +782,6 @@ function App() {
         </div>
 
         <div className="topbar-actions">
-          <button className="calendar-connect" disabled title="Google Calendar connection is disabled for now">
-            <CalendarDays size={16} />
-            Calendar connection coming soon
-          </button>
-
           <select
             className="language-select"
             value={language}

@@ -735,6 +735,18 @@ function App() {
     setStatus("Ready");
   }
 
+  function clearActivityHistory() {
+    setHistory([]);
+    setConversation([]);
+    setConversationSources([]);
+    setConversationMode("general");
+    setConversationContext({});
+    localStorage.removeItem(STORAGE.history);
+    setPreview(null);
+    setInput("");
+    speak("Your history has been cleared.");
+  }
+
   async function fetchWeather(command) {
     setBusy(true);
     setWeather(null);
@@ -857,10 +869,7 @@ function App() {
     }
 
     if (preview.type === "clear_history") {
-      setHistory([]);
-      localStorage.removeItem(STORAGE.history);
-      setPreview(null);
-      speak("History cleared.");
+      clearActivityHistory();
       return;
     }
 
@@ -1545,9 +1554,9 @@ function App() {
               <h2>Recent commands</h2>
             </div>
 
-            <button className="clear-link" onClick={() => processCommand("clear history")}>
-              <History size={16} />
-              Clear
+            <button className="clear-link" onClick={clearActivityHistory}>
+              <Trash2 size={16} />
+              Clear history
             </button>
           </div>
 

@@ -1,32 +1,41 @@
 # Voice Command Center
 
-A browser-based evolution of the original Python voice assistant.
+A browser-based evolution of the original Python voice assistant into a voice-first personal operations prototype.
 
-The prototype turns spoken or typed commands into structured actions with a visible confirmation step before anything happens.
+## What it can do
 
-## Features
-
-- Browser microphone input
-- Typed-command fallback
-- Live speech transcript
-- Intent detection
-- Task creation with simple due-date parsing
-- Note capture
-- Website shortcuts
-- Web search commands
-- Current-time responses
-- Optional text-to-speech replies
-- Action preview before execution
-- Persistent tasks, notes, and command history
-- Responsive interface
+- Voice or typed commands
+- Multilingual speech transcription with selectable language
+- Tasks with dates and automatic categories
+- Notes with timestamps and categories
+- Meeting scheduling with local conflict checks
+- Prefilled Google Calendar events
+- Instant Jitsi meeting links
+- Live weather using browser location or a named city
+- Real `.xlsx` spreadsheet generation
+- Social and productivity shortcuts
+- YouTube music search
+- Web search fallback for open-ended questions
+- Travel shortcuts for flights, Airbnb, and hotels
+- Dated timeline across tasks, notes, and meetings
+- Optional spoken responses
+- Clearable command history
+- Browser-local persistence
 
 ## Example commands
 
-- “Remind me to submit my application tomorrow”
-- “Note that the recruiter asked about SQL”
+- “Schedule a meeting tomorrow at 2 pm for 30 minutes”
+- “Create an Excel with columns name, email, status”
+- “What is the weather in Chicago?”
+- “Play Yellow by Coldplay”
+- “Plan a trip to Miami”
 - “Open LinkedIn”
-- “Search for product manager interview questions”
-- “What time is it?”
+- “Remind me to follow up with the recruiter Friday”
+- “Note that the hiring manager asked about APIs”
+
+## Important implementation note
+
+The prototype can create a meeting locally, generate a working Jitsi link, and open a prefilled Google Calendar event. Directly writing into a user's Google Calendar or automatically generating a Google Meet link would require Google OAuth and Calendar API authorization, which is intentionally not embedded in this public prototype.
 
 ## Run locally
 
@@ -35,4 +44,4 @@ npm install
 npm run dev
 ```
 
-The original Python assistant remains in the repository root.
+The original Python assistant remains preserved in the repository root.

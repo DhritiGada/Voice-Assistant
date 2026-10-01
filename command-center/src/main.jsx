@@ -31,6 +31,9 @@ import {
 } from "lucide-react";
 import "./styles.css";
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly";
+
 const STORAGE = {
   tasks: "voice-command-center.tasks",
   notes: "voice-command-center.notes",
@@ -472,6 +475,131 @@ function App() {
       .slice(0, 10);
   }, [tasks, notes, events]);
 
+  async function fetchGoogleEvents(token) {
+    try {
+      setCalendarStatus("Syncing Google Calendar…");
+      const timeMin = new Date();
+      timeMin.setDate(timeMin.getDate() - 1);
+      const timeMax = new Date();
+      timeMax.setDate(timeMax.getDate() + 90);
+
+      const params = new URLSearchParams({
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        singleEvents: "true",
+        orderBy: "startTime",
+        maxResults: "250",
+      });
+
+      const response = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!response.ok) throw new Error("Calendar access expired. Please reconnect.");
+
+      const data = await response.json();
+      const mapped = (data.items || [])
+        .filter((item) => item.start?.dateTime && item.end?.dateTime)
+        .map((item) => ({
+          id: item.id,
+          title: item.summary || "Busy",
+          start: item.start.dateTime,
+          end: item.end.dateTime,
+          source: "google",
+        }));
+
+      setGoogleEvents(mapped);
+      setCalendarStatus(`Google Calendar connected · ${mapped.length} upcoming events synced`);
+    } catch (error) {
+      setCalendarStatus(error.message || "Could not sync Google Calendar");
+      setGoogleEvents([]);
+    }
+  }
+
+  function connectGoogleCalendar() {
+    if (!GOOGLE_CLIENT_ID) {
+      setCalendarStatus("Google Calendar setup is not configured yet");
+      return;
+    }
+
+    if (!window.google?.accounts?.oauth2) {
+      setCalendarStatus("Google sign-in is still loading. Try again in a moment.");
+      return;
+    }
+
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GOOGLE_SCOPES,
+      callback: (response) => {
+        if (response.error || !response.access_token) {
+          setCalendarStatus("Google Calendar connection was not completed");
+          return;
+        }
+        sessionStorage.setItem("voice-command-center.google-token", response.access_token);
+        setGoogleToken(response.access_token);
+        setCalendarStatus("Google Calendar connected");
+      },
+    });
+
+    client.requestAccessToken({ prompt: googleToken ? "" : "consent" });
+  }
+
+  function disconnectGoogleCalendar() {
+    if (googleToken && window.google?.accounts?.oauth2) {
+      window.google.accounts.oauth2.revoke(googleToken, () => {});
+    }
+    sessionStorage.removeItem("voice-command-center.google-token");
+    setGoogleToken("");
+    setGoogleEvents([]);
+    setCalendarStatus("Calendar not connected");
+  }
+
+  async function createGoogleCalendarEvent(event) {
+    if (!googleToken) return null;
+
+    const body = {
+      summary: event.title,
+      description: "Created with Voice Command Center",
+      start: { dateTime: event.start },
+      end: { dateTime: event.end },
+      conferenceData: {
+        createRequest: {
+          requestId: `voice-command-${crypto.randomUUID()}`,
+          conferenceSolutionKey: { type: "hangoutsMeet" },
+        },
+      },
+    };
+
+    const response = await fetch(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events?conferenceDataVersion=1&sendUpdates=all",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${googleToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.error?.message || "Could not create the Google Calendar event.");
+    }
+
+    const created = await response.json();
+    await fetchGoogleEvents(googleToken);
+
+    return {
+      htmlLink: created.htmlLink,
+      meetingUrl:
+        created.hangoutLink ||
+        created.conferenceData?.entryPoints?.find((entry) => entry.entryPointType === "video")?.uri ||
+        "",
+    };
+  }
+
   function speak(message) {
     if (!voiceReply || !("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
@@ -688,7 +816,7 @@ function App() {
     "Open LinkedIn",
   ];
 
-  const conflict = preview?.type === "meeting" ? meetingConflict(events, preview) : null;
+  const conflict = preview?.type === "meeting" ? meetingConflict([...events, ...googleEvents], preview) : null;
   const completedTasks = tasks.filter((task) => task.done).length;
 
   return (
@@ -703,6 +831,15 @@ function App() {
         </div>
 
         <div className="topbar-actions">
+          <button
+            className={googleToken ? "calendar-connect connected" : "calendar-connect"}
+            onClick={googleToken ? disconnectGoogleCalendar : connectGoogleCalendar}
+            title={calendarStatus}
+          >
+            <CalendarDays size={16} />
+            {googleToken ? "Calendar connected" : "Connect Google Calendar"}
+          </button>
+
           <select
             className="language-select"
             value={language}
@@ -895,7 +1032,7 @@ function App() {
               <div className="preview-actions">
                 {preview.type === "meeting" && (
                   <button className="confirm" disabled={!preview.date || !preview.time || Boolean(conflict)} onClick={scheduleMeeting}>
-                    <CalendarDays size={17} /> Add + open Google Calendar
+                    <CalendarDays size={17} /> {googleToken ? (busy ? "Adding…" : "Add to Google Calendar") : "Create calendar draft"}
                   </button>
                 )}
 
@@ -1021,7 +1158,7 @@ function App() {
 
       <footer>
         <div className="footer-note"><CheckCircle2 size={16} /> External actions stay visible and user-controlled.</div>
-        <span>Tasks, notes, meetings, and history are stored locally in your browser.</span>
+        <span>{googleToken ? calendarStatus : "Tasks, notes, meetings, and history are stored locally in your browser."}</span>
       </footer>
     </main>
   );

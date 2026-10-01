@@ -475,6 +475,10 @@ function App() {
   const [language, setLanguage] = useState("en-US");
   const [weather, setWeather] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [conversation, setConversation] = useState([]);
+  const [conversationMode, setConversationMode] = useState("general");
+  const [conversationContext, setConversationContext] = useState({});
+  const [conversationSources, setConversationSources] = useState([]);
   const recognitionRef = useRef(null);
 
   useEffect(() => save(STORAGE.tasks, tasks), [tasks]);
@@ -525,6 +529,51 @@ function App() {
     window.speechSynthesis.speak(utterance);
   }
 
+  async function askAssistant(message, mode = conversationMode, context = conversationContext) {
+    const userEntry = { id: crypto.randomUUID(), role: "user", text: message };
+    const nextHistory = [...conversation, userEntry].slice(-12);
+
+    setConversation(nextHistory);
+    setConversationMode(mode);
+    setConversationContext(context);
+    setConversationSources([]);
+    setBusy(true);
+
+    try {
+      const response = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          mode,
+          context,
+          history: nextHistory,
+        }),
+      });
+
+      const data = await response.json();
+      const assistantText = data.message || "What would you like to do next?";
+      const assistantEntry = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        text: assistantText,
+      };
+
+      setConversation((current) => [...current, assistantEntry].slice(-12));
+      setConversationSources(data.sources || []);
+      speak(assistantText);
+    } catch {
+      const fallback = "I couldn’t reach the conversational assistant just now, but the built-in actions still work.";
+      setConversation((current) => [
+        ...current,
+        { id: crypto.randomUUID(), role: "assistant", text: fallback },
+      ].slice(-12));
+      speak(fallback);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function processCommand(text) {
     const command = parseCommand(text);
     if (!command) return;
@@ -546,6 +595,34 @@ function App() {
 
     if (command.type === "answer") {
       speak(`The time is ${command.title}`);
+    }
+
+    if (command.type === "music") {
+      const context = { title: command.title };
+      setConversationMode("music");
+      setConversationContext(context);
+      askAssistant(
+        `I want to play ${command.title}. Recommend similar songs and confirm what I should play.`,
+        "music",
+        context
+      );
+    } else if (command.type === "travel") {
+      const context = {
+        destination: command.destination,
+        startDate: command.startDate,
+        endDate: command.endDate,
+      };
+      setConversationMode("travel");
+      setConversationContext(context);
+      askAssistant(
+        `Help me plan this trip: ${text}`,
+        "travel",
+        context
+      );
+    } else if (command.type === "search") {
+      setConversationMode("general");
+      setConversationContext({ query: command.title });
+      askAssistant(command.title, "general", { query: command.title });
     }
   }
 
@@ -696,18 +773,11 @@ function App() {
     }
 
     if (preview.type === "music") {
-      const query = preview.title;
-      const playerWindow = window.open("about:blank", "_blank");
-
-      resolveYouTubeFirstResult(query).then((url) => {
-        if (playerWindow) {
-          playerWindow.location.href = url;
-        } else {
-          window.location.href = url;
-        }
-      });
-
-      speak("Opening the first YouTube result.");
+      askAssistant(
+        `I’m ready to play ${preview.title}. Ask me whether I want this song or one of your recommendations.`,
+        "music",
+        { title: preview.title }
+      );
       return;
     }
 
@@ -1221,6 +1291,81 @@ function App() {
             </div>
           )}
         </div>
+      </section>
+
+      <section className="conversation-shell">
+        <article className="conversation-card">
+          <div className="data-heading">
+            <div>
+              <span className="section-label">CONVERSATION</span>
+              <h2>Talk it through</h2>
+            </div>
+            <span className="metric">{conversationMode}</span>
+          </div>
+
+          <div className="conversation-list">
+            {conversation.length === 0 ? (
+              <p className="empty-copy">
+                Ask for a song, a trip plan, or a question and I’ll continue the conversation here.
+              </p>
+            ) : (
+              conversation.map((entry) => (
+                <div className={entry.role === "assistant" ? "chat-bubble assistant" : "chat-bubble user"} key={entry.id}>
+                  <span>{entry.role === "assistant" ? "Assistant" : "You"}</span>
+                  <p>{entry.text}</p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {!!conversationSources.length && (
+            <div className="source-list">
+              <span>Useful sources</span>
+              <div>
+                {conversationSources.map((source) => (
+                  <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                    {source.title || source.url}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <form
+            className="conversation-input"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const message = input.trim();
+              if (!message) return;
+              setInput("");
+              askAssistant(message);
+            }}
+          >
+            <input
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              placeholder="Reply naturally…"
+            />
+            <button disabled={busy} aria-label="Send conversational reply">
+              <Send size={17} />
+            </button>
+          </form>
+
+          {conversationMode === "music" && conversationContext?.title && (
+            <button
+              className="play-confirm"
+              onClick={async () => {
+                const playerWindow = window.open("about:blank", "_blank");
+                const url = await resolveYouTubeFirstResult(conversationContext.title);
+                if (playerWindow) playerWindow.location.href = url;
+                else window.location.href = url;
+              }}
+            >
+              <Music2 size={16} />
+              Play “{conversationContext.title}”
+            </button>
+          )}
+        </article>
       </section>
 
       <section className="dashboard">
